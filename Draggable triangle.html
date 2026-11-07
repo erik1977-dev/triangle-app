@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Draggable triangle</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#16202a;--mute:#5d6b78;--grid:#e1e6eb;--base:#2f6f8f;--side:#c2410c;--fill:rgba(47,111,143,.08);--line:#d3dae1;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12181e;--panel:#1b232b;--ink:#e8edf1;--mute:#93a1ae;--grid:#26313b;--base:#6bb8d9;--side:#f59a62;--fill:rgba(107,184,217,.10);--line:#33414d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12181e;--panel:#1b232b;--ink:#e8edf1;--mute:#93a1ae;--grid:#26313b;--base:#6bb8d9;--side:#f59a62;--fill:rgba(107,184,217,.10);--line:#33414d;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.4}
+main{max-width:860px;margin:0 auto;padding:20px 16px 32px}
+h1{font-size:1.35rem;margin:0 0 4px;font-weight:650}
+p.hint{margin:0 0 14px;color:var(--mute);font-size:.95rem}
+#stage{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+svg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
+.node{cursor:grab}.node:active{cursor:grabbing}
+.node:focus-visible circle.ring{stroke:var(--ink);stroke-width:2}
+.lbl{font-size:15px;font-weight:600;paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round}
+.name{font-size:14px;fill:var(--mute);font-weight:600}
+#readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.card small{display:block;color:var(--mute);font-size:.82rem}
+.card b{font-size:1.5rem;font-variant-numeric:tabular-nums}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+#angIn{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+#angIn label{display:inline-flex;flex-direction:column;gap:4px;margin-right:16px;font-size:.82rem;color:var(--mute)}
+#angIn input{width:120px;padding:6px 8px;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+#angIn input:focus-visible{outline:2px solid var(--base);outline-offset:1px}
+#angMsg{display:block;margin-top:6px;min-height:1.2em;color:var(--side)}
+</style>
+</head>
+<body>
+<main>
+<h1>Draggable triangle</h1>
+<p class="hint">Drag any corner. Side lengths update as you move. One grid square is 1 unit.</p>
+<div id="stage">
+<svg id="svg" viewBox="0 0 800 520" role="img" aria-label="Triangle with draggable corners">
+<g id="grid"></g>
+<polygon id="tri" fill="var(--fill)" stroke="none"></polygon>
+<line id="eAB" stroke="var(--base)" stroke-width="3"></line>
+<line id="eTA" stroke="var(--side)" stroke-width="3"></line>
+<line id="eTB" stroke="var(--side)" stroke-width="3"></line>
+<text id="lAB" class="lbl" text-anchor="middle" fill="var(--base)"></text>
+<text id="lTA" class="lbl" text-anchor="middle" fill="var(--side)"></text>
+<text id="lTB" class="lbl" text-anchor="middle" fill="var(--side)"></text>
+<g id="nodes"></g>
+</svg>
+</div>
+<div id="readout">
+<div class="card"><small><span class="sw" style="background:var(--base)"></span>Base (A to B)</small><b id="rAB"></b></div>
+<div class="card"><small><span class="sw" style="background:var(--side)"></span>Top to A</small><b id="rTA"></b></div>
+<div class="card"><small><span class="sw" style="background:var(--side)"></span>Top to B</small><b id="rTB"></b></div>
+<div class="card"><small>Angle at A</small><b id="aA"></b></div>
+<div class="card"><small>Angle at B</small><b id="aB"></b></div>
+<div class="card"><small>Angle at Top</small><b id="aT"></b></div>
+</div>
+<div id="angIn">
+<label>Set angle at A (°)<input id="inA" type="number" min="1" max="178" step="0.1" inputmode="decimal"></label>
+<label>Set angle at B (°)<input id="inB" type="number" min="1" max="178" step="0.1" inputmode="decimal"></label>
+<label>Set base length A to B (units)<input id="inL" type="number" min="0.1" step="any" inputmode="decimal"></label>
+<small id="angMsg" role="status"></small>
+</div>
+</main>
+<script>
+(function(){
+var NS="http://www.w3.org/2000/svg",W=800,H=520,UNIT=40;
+var svg=document.getElementById("svg");
+var pts={A:{x:220,y:400},B:{x:580,y:400},T:{x:400,y:120}};
+var names={A:"A",B:"B",T:"Top"};
+var g=document.getElementById("grid");
+for(var x=0;x<=W;x+=UNIT){var l=document.createElementNS(NS,"line");l.setAttribute("x1",x);l.setAttribute("x2",x);l.setAttribute("y1",0);l.setAttribute("y2",H);l.setAttribute("stroke","var(--grid)");g.appendChild(l);}
+for(var y=0;y<=H;y+=UNIT){var m=document.createElementNS(NS,"line");m.setAttribute("y1",y);m.setAttribute("y2",y);m.setAttribute("x1",0);m.setAttribute("x2",W);m.setAttribute("stroke","var(--grid)");g.appendChild(m);}
+var nodesG=document.getElementById("nodes"),els={};
+Object.keys(pts).forEach(function(k){
+ var grp=document.createElementNS(NS,"g");grp.setAttribute("class","node");grp.setAttribute("tabindex","0");grp.setAttribute("aria-label","Corner "+names[k]+", drag or use arrow keys");
+ var hit=document.createElementNS(NS,"circle");hit.setAttribute("r",28);hit.setAttribute("fill","transparent");
+ var ring=document.createElementNS(NS,"circle");ring.setAttribute("class","ring");ring.setAttribute("r",11);ring.setAttribute("fill",k==="T"?"var(--side)":"var(--base)");ring.setAttribute("stroke","var(--panel)");ring.setAttribute("stroke-width",3);
+ var t=document.createElementNS(NS,"text");t.setAttribute("class","name");t.setAttribute("text-anchor","middle");t.textContent=names[k];
+ grp.appendChild(hit);grp.appendChild(ring);grp.appendChild(t);nodesG.appendChild(grp);els[k]={g:grp,t:t};
+ var drag=false;
+ grp.addEventListener("pointerdown",function(e){drag=true;grp.setPointerCapture(e.pointerId);e.preventDefault();});
+ grp.addEventListener("pointermove",function(e){if(!drag)return;var r=svg.getBoundingClientRect();
+  pts[k].x=clamp((e.clientX-r.left)*W/r.width,14,W-14);pts[k].y=clamp((e.clientY-r.top)*H/r.height,14,H-14);draw();});
+ grp.addEventListener("pointerup",function(){drag=false;});
+ grp.addEventListener("pointercancel",function(){drag=false;});
+ grp.addEventListener("keydown",function(e){var s=e.shiftKey?UNIT:8,d={ArrowLeft:[-s,0],ArrowRight:[s,0],ArrowUp:[0,-s],ArrowDown:[0,s]}[e.key];
+  if(!d)return;e.preventDefault();pts[k].x=clamp(pts[k].x+d[0],14,W-14);pts[k].y=clamp(pts[k].y+d[1],14,H-14);draw();});
+});
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function dist(p,q){return Math.hypot(p.x-q.x,p.y-q.y)/UNIT;}
+function fmt(v){return v.toFixed(2);}
+function ang(P,Q,R){var ux=Q.x-P.x,uy=Q.y-P.y,vx=R.x-P.x,vy=R.y-P.y,m=Math.hypot(ux,uy)*Math.hypot(vx,vy);if(!m)return null;return Math.acos(clamp((ux*vx+uy*vy)/m,-1,1))*180/Math.PI;}
+function fa(a){return a===null?"–":a.toFixed(1)+"°";}
+function edge(id,p,q){var e=document.getElementById(id);e.setAttribute("x1",p.x);e.setAttribute("y1",p.y);e.setAttribute("x2",q.x);e.setAttribute("y2",q.y);}
+function label(id,p,q,txt,out){
+ var mx=(p.x+q.x)/2,my=(p.y+q.y)/2,dx=q.x-p.x,dy=q.y-p.y,len=Math.hypot(dx,dy)||1;
+ var nx=-dy/len,ny=dx/len,c=out;var ox=c.x-mx,oy=c.y-my;if(nx*ox+ny*oy>0){nx=-nx;ny=-ny;}
+ var el=document.getElementById(id);el.setAttribute("x",mx+nx*20);el.setAttribute("y",my+ny*20+5);el.textContent=txt;}
+function draw(){
+ var A=pts.A,B=pts.B,T=pts.T;
+ document.getElementById("tri").setAttribute("points",[A,B,T].map(function(p){return p.x+","+p.y;}).join(" "));
+ edge("eAB",A,B);edge("eTA",T,A);edge("eTB",T,B);
+ var ab=fmt(dist(A,B)),ta=fmt(dist(T,A)),tb=fmt(dist(T,B));
+ var cen={x:(A.x+B.x+T.x)/3,y:(A.y+B.y+T.y)/3};
+ label("lAB",A,B,ab,cen);label("lTA",T,A,ta,cen);label("lTB",T,B,tb,cen);
+ document.getElementById("rAB").textContent=ab;document.getElementById("rTA").textContent=ta;document.getElementById("rTB").textContent=tb;
+ var an={A:ang(A,B,T),B:ang(B,A,T),T:ang(T,A,B)};
+ document.getElementById("aA").textContent=fa(an.A);document.getElementById("aB").textContent=fa(an.B);document.getElementById("aT").textContent=fa(an.T);
+ syncIn("inA",an.A);syncIn("inB",an.B);syncIn("inL",dist(A,B),2);
+ Object.keys(els).forEach(function(k){els[k].g.setAttribute("transform","translate("+pts[k].x+","+pts[k].y+")");els[k].t.setAttribute("y",k==="T"?-20:30);els[k].t.textContent=names[k]+" "+fa(an[k]);});
+}
+function syncIn(id,a,d){var i=document.getElementById(id);if(document.activeElement!==i)i.value=a===null?"":a.toFixed(d===undefined?1:d);}
+function setAngles(){
+ var a=parseFloat(document.getElementById("inA").value),b=parseFloat(document.getElementById("inB").value),msg=document.getElementById("angMsg");
+ if(!(a>0&&b>0&&a+b<180)){msg.textContent="Enter angles above 0° that add up to less than 180°.";return;}
+ var A=pts.A,B=pts.B,dx=B.x-A.x,dy=B.y-A.y,L=Math.hypot(dx,dy);
+ if(!L){msg.textContent="Move A and B apart first.";return;}
+ var ra=a*Math.PI/180,rb=b*Math.PI/180,s=(dx*(pts.T.y-A.y)-dy*(pts.T.x-A.x))>=0?1:-1,ux=dx/L,uy=dy/L,len=L*Math.sin(rb)/Math.sin(ra+rb);
+ var tx=A.x+len*(ux*Math.cos(ra)-s*uy*Math.sin(ra)),ty=A.y+len*(uy*Math.cos(ra)+s*ux*Math.sin(ra));
+ if(tx<14||tx>W-14||ty<14||ty>H-14){msg.textContent="The top node would leave the drawing area. Try other angles or move A and B closer together.";return;}
+ pts.T.x=tx;pts.T.y=ty;msg.textContent="";draw();
+}
+["inA","inB"].forEach(function(id){var e=document.getElementById(id);e.addEventListener("change",setAngles);e.addEventListener("blur",draw);});
+function setBase(){
+ var v=parseFloat(document.getElementById("inL").value),msg=document.getElementById("angMsg");
+ var A=pts.A,B=pts.B,L=dist(A,B);
+ if(!(v>0)){msg.textContent="Enter a base length above 0.";return;}
+ if(!L){msg.textContent="Move A and B apart first.";return;}
+ var k=v/L,m={x:(A.x+B.x)/2,y:(A.y+B.y)/2},n={},keys=["A","B","T"];
+ keys.forEach(function(key){n[key]={x:m.x+k*(pts[key].x-m.x),y:m.y+k*(pts[key].y-m.y)};});
+ var ok=keys.every(function(key){return n[key].x>=14&&n[key].x<=W-14&&n[key].y>=14&&n[key].y<=H-14;});
+ if(!ok){msg.textContent="The triangle would leave the drawing area. Try a smaller base length.";return;}
+ keys.forEach(function(key){pts[key]=n[key];});
+ msg.textContent="";draw();
+}
+(function(){var e=document.getElementById("inL");e.addEventListener("change",setBase);e.addEventListener("blur",draw);})();
+draw();
+})();
+</script>
+</body>
+</html>
