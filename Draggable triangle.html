@@ -26,7 +26,7 @@ svg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
 .card small{display:block;color:var(--mute);font-size:.82rem}
 .card b{font-size:1.5rem;font-variant-numeric:tabular-nums}
 .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
-#angIn{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+#angIn{margin:12px 0 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
 #angIn label{display:inline-flex;flex-direction:column;gap:4px;margin-right:16px;font-size:.82rem;color:var(--mute)}
 #angIn input{width:120px;padding:6px 8px;font:inherit;font-size:1rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px}
 #angIn input:focus-visible{outline:2px solid var(--base);outline-offset:1px}
@@ -47,8 +47,18 @@ svg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
 <text id="lAB" class="lbl" text-anchor="middle" fill="var(--base)"></text>
 <text id="lTA" class="lbl" text-anchor="middle" fill="var(--side)"></text>
 <text id="lTB" class="lbl" text-anchor="middle" fill="var(--side)"></text>
+<line id="eExt" stroke="var(--mute)" stroke-width="1.5" stroke-dasharray="2 5"></line>
+<line id="eH" stroke="var(--ink)" stroke-width="2" stroke-dasharray="7 5"></line>
+<circle id="pH" r="4" fill="var(--ink)"></circle>
+<text id="lH" class="lbl" text-anchor="middle" fill="var(--ink)"></text>
 <g id="nodes"></g>
 </svg>
+</div>
+<div id="angIn">
+<label>Set angle at A (°)<input id="inA" type="number" min="1" max="178" step="0.1" inputmode="decimal"></label>
+<label>Set angle at B (°)<input id="inB" type="number" min="1" max="178" step="0.1" inputmode="decimal"></label>
+<label>Set base length A to B (units)<input id="inL" type="number" min="0.1" step="any" inputmode="decimal"></label>
+<small id="angMsg" role="status"></small>
 </div>
 <div id="readout">
 <div class="card"><small><span class="sw" style="background:var(--base)"></span>Base (A to B)</small><b id="rAB"></b></div>
@@ -57,12 +67,9 @@ svg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
 <div class="card"><small>Angle at A</small><b id="aA"></b></div>
 <div class="card"><small>Angle at B</small><b id="aB"></b></div>
 <div class="card"><small>Angle at Top</small><b id="aT"></b></div>
-</div>
-<div id="angIn">
-<label>Set angle at A (°)<input id="inA" type="number" min="1" max="178" step="0.1" inputmode="decimal"></label>
-<label>Set angle at B (°)<input id="inB" type="number" min="1" max="178" step="0.1" inputmode="decimal"></label>
-<label>Set base length A to B (units)<input id="inL" type="number" min="0.1" step="any" inputmode="decimal"></label>
-<small id="angMsg" role="status"></small>
+<div class="card"><small>Perimeter</small><b id="rP"></b></div>
+<div class="card"><small>Area (square units)</small><b id="rArea"></b></div>
+<div class="card"><small>Height (top to base)</small><b id="rH"></b></div>
 </div>
 </main>
 <script>
@@ -111,6 +118,18 @@ function draw(){
  var an={A:ang(A,B,T),B:ang(B,A,T),T:ang(T,A,B)};
  document.getElementById("aA").textContent=fa(an.A);document.getElementById("aB").textContent=fa(an.B);document.getElementById("aT").textContent=fa(an.T);
  syncIn("inA",an.A);syncIn("inB",an.B);syncIn("inL",dist(A,B),2);
+ document.getElementById("rP").textContent=fmt(dist(A,B)+dist(T,A)+dist(T,B));
+ var bx=B.x-A.x,by=B.y-A.y,bl=bx*bx+by*by;
+ if(bl>0){
+  var t=((T.x-A.x)*bx+(T.y-A.y)*by)/bl,F={x:A.x+t*bx,y:A.y+t*by},hv=dist(T,F);
+  edge("eH",T,F);edge("eExt",t<0?A:B,t<0||t>1?F:(t<0?A:B));
+  document.getElementById("pH").setAttribute("cx",F.x);document.getElementById("pH").setAttribute("cy",F.y);
+  label("lH",T,F,fmt(hv),cen);document.getElementById("rH").textContent=fmt(hv);
+ }else{
+  edge("eH",T,T);edge("eExt",T,T);document.getElementById("pH").setAttribute("cx",T.x);document.getElementById("pH").setAttribute("cy",T.y);
+  document.getElementById("lH").textContent="";document.getElementById("rH").textContent="–";
+ }
+ document.getElementById("rArea").textContent=fmt(Math.abs((B.x-A.x)*(T.y-A.y)-(T.x-A.x)*(B.y-A.y))/2/(UNIT*UNIT));
  Object.keys(els).forEach(function(k){els[k].g.setAttribute("transform","translate("+pts[k].x+","+pts[k].y+")");els[k].t.setAttribute("y",k==="T"?-20:30);els[k].t.textContent=names[k]+" "+fa(an[k]);});
 }
 function syncIn(id,a,d){var i=document.getElementById(id);if(document.activeElement!==i)i.value=a===null?"":a.toFixed(d===undefined?1:d);}
